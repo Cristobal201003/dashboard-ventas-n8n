@@ -130,5 +130,5 @@ with placeholder.container():
 
 # --- AUTO REFRESH ---
 time.sleep(5)
-st.experimental_rerun()
+st.rerun()
 
