@@ -10,9 +10,8 @@ st.set_page_config(page_title="Dashboard Ventas", layout="wide", page_icon="🚀
 # --- CONEXIÓN A BASE DE DATOS ---
 DATABASE_URL = os.getenv('DATABASE_URL')
 
-# Manejo de error si no hay URL (para que no crashee feo)
 if not DATABASE_URL:
-    st.error("⚠️ No se encontró la variable DATABASE_URL. Configúrala en EasyPanel.")
+    st.error("⚠️ No se encontró la variable DATABASE_URL.")
     st.stop()
 
 try:
@@ -21,82 +20,90 @@ except Exception as e:
     st.error(f"Error conectando a BD: {e}")
     st.stop()
 
-# --- ESTADO DE LA SESIÓN (MEMORIA) ---
-# Usamos esto para recordar cuántos leads teníamos la última vez y comparar
+# --- ESTADO DE LA SESIÓN ---
+# Inicializamos en -1 para que la primera vez SIEMPRE haga la animación de "Cargando sistema"
 if 'last_row_count' not in st.session_state:
-    st.session_state.last_row_count = 0
+    st.session_state.last_row_count = -1 
 
-# --- TÍTULO PRINCIPAL ---
 st.title("🚀 Monitor de Leads en Tiempo Real")
 st.markdown("---")
 
-# Contenedor principal que se refrescará
+# Contenedor principal
 placeholder = st.empty()
 
 while True:
-    with placeholder.container():
-        try:
-            # 1. CONSULTAR DATOS
-            query = "SELECT * FROM leads ORDER BY created_at DESC LIMIT 10"
-            df = pd.read_sql(query, engine)
-            
-            current_count = len(df)
+    try:
+        # 1. CONSULTAR DATOS REALES (Siempre consultamos lo más fresco)
+        query = "SELECT * FROM leads ORDER BY created_at DESC LIMIT 10"
+        df = pd.read_sql(query, engine)
+        current_count = len(df)
 
-            # 2. LÓGICA DE SIMULACIÓN DE CORREO
-            # Si hay más filas ahora que la última vez, simulamos la llegada
-            if current_count > st.session_state.last_row_count and st.session_state.last_row_count > 0:
-                
-                # Simulación visual de espera (como si estuviera leyendo el correo)
-                with st.spinner('📨 Recibiendo nuevo correo... Analizando datos con IA...'):
-                    time.sleep(2) # Pausa dramática de 2 segundos
-                
-                # Notificación flotante
-                st.toast('¡Nuevo Lead detectado y procesado!', icon='✅')
+        # 2. DETECTAR SI LLEGÓ ALGO NUEVO
+        # Comparamos lo que acabamos de leer con lo que teníamos guardado
+        if current_count > st.session_state.last_row_count:
             
-            # Actualizamos el contador en memoria
+            # --- ZONA DE DRAMA (Solo ocurre si cambió la BD) ---
+            
+            # Limpiamos el contenedor para mostrar solo la animación
+            with placeholder.container():
+                
+                # Diseño del "Correo Entrante"
+                st.markdown("""
+                <div style="text-align: center; padding: 50px;">
+                    <h1 style='font-size: 60px;'>📨</h1>
+                    <h2>Nuevo Correo Detectado...</h2>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Barra de progreso simulada
+                bar = st.progress(0)
+                for i in range(100):
+                    time.sleep(0.01) # Simula velocidad de carga
+                    bar.progress(i + 1)
+                
+                st.markdown("<h3 style='text-align: center;'>🤖 Extrayendo datos con IA...</h3>", unsafe_allow_html=True)
+                time.sleep(1.5) # Retraso extra para leer el mensaje
+
+            # Actualizamos el estado para que no se repita hasta el próximo correo real
             st.session_state.last_row_count = current_count
-
-            # 3. MÉTRICAS
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Total Leads", f"{current_count}")
             
+            # Notificación
+            st.toast('¡Base de datos actualizada!', icon='✅')
+
+        # 3. MOSTRAR LA TABLA (Estado Normal)
+        # Esto sobrescribe la animación y muestra los datos finales
+        with placeholder.container():
+            # Métricas
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Leads", f"{current_count}")
             hot_count = len(df[df['clasificacion_ia'] == 'Hot'])
             col2.metric("🔥 Hot Leads", hot_count)
-            
-            # Ejemplo de métrica extra para diseño
-            col3.metric("📡 Estado del Sistema", "Activo")
+            col3.metric("📡 Estado", "Esperando nuevos correos...")
 
-            # 4. TABLA PRINCIPAL CON DISEÑO MEJORADO
             st.subheader("📋 Bitácora de Asignación Reciente")
             
             st.dataframe(
                 df[['created_at', 'nombre', 'clasificacion_ia', 'vendedor_asignado', 'status_step', 'progress']],
                 column_config={
                     "created_at": st.column_config.DatetimeColumn(
-                        "Creación",   # <--- CAMBIO DE NOMBRE AQUÍ
+                        "Creación",
                         format="D MMM YYYY, h:mm a"
                     ),
                     "nombre": "Nombre del Cliente",
-                    "clasificacion_ia": st.column_config.TextColumn(
-                        "Clasificación IA",
-                        help="Clasificación basada en el sentimiento del correo"
-                    ),
+                    "clasificacion_ia": st.column_config.TextColumn("Clasificación IA"),
                     "vendedor_asignado": "Vendedor",
                     "status_step": "Estatus Actual",
                     "progress": st.column_config.ProgressColumn(
-                        "Progreso", 
-                        format="%d%%", 
-                        min_value=0, 
-                        max_value=100
+                        "Progreso", format="%d%%", min_value=0, max_value=100
                     ),
                 },
                 use_container_width=True,
                 hide_index=True
             )
-            
-        except Exception as e:
-            st.warning("⏳ Esperando conexión o datos... (Asegúrate que la tabla 'leads' exista)")
-            # st.write(e) # Descomentar para ver el error técnico si falla
 
-    # Intervalo de actualización (Polling)
+    except Exception as e:
+        with placeholder.container():
+            st.warning("⏳ Esperando conexión a la base de datos...")
+    
+    # Espera 2 segundos antes de volver a consultar a la BD
     time.sleep(2)
