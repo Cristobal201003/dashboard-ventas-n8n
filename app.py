@@ -21,33 +21,27 @@ except Exception as e:
     st.stop()
 
 # --- ESTADO DE LA SESIÓN ---
-# Inicializamos en -1 para que la primera vez SIEMPRE haga la animación de "Cargando sistema"
 if 'last_row_count' not in st.session_state:
     st.session_state.last_row_count = -1 
 
 st.title("🚀 Monitor de Leads en Tiempo Real")
 st.markdown("---")
 
-# Contenedor principal
 placeholder = st.empty()
 
 while True:
     try:
-        # 1. CONSULTAR DATOS REALES (Siempre consultamos lo más fresco)
-        query = "SELECT * FROM leads ORDER BY created_at DESC LIMIT 10"
+        # 1. CONSULTAR DATOS (Aumentamos el límite para tener estadística real)
+        # Traemos los últimos 100 para que las gráficas tengan sentido
+        query = "SELECT * FROM leads ORDER BY created_at DESC LIMIT 100"
         df = pd.read_sql(query, engine)
         current_count = len(df)
 
-        # 2. DETECTAR SI LLEGÓ ALGO NUEVO
-        # Comparamos lo que acabamos de leer con lo que teníamos guardado
+        # 2. DETECTAR SI LLEGÓ ALGO NUEVO (Lógica de animación)
         if current_count > st.session_state.last_row_count:
             
-            # --- ZONA DE DRAMA (Solo ocurre si cambió la BD) ---
-            
-            # Limpiamos el contenedor para mostrar solo la animación
             with placeholder.container():
-                
-                # Diseño del "Correo Entrante"
+                # --- ANIMACIÓN DE CORREO ENTRANTE ---
                 st.markdown("""
                 <div style="text-align: center; padding: 50px;">
                     <h1 style='font-size: 60px;'>📨</h1>
@@ -55,47 +49,97 @@ while True:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Barra de progreso simulada
                 bar = st.progress(0)
                 for i in range(100):
-                    time.sleep(0.01) # Simula velocidad de carga
+                    time.sleep(0.01)
                     bar.progress(i + 1)
                 
-                st.markdown("<h3 style='text-align: center;'>🤖 Extrayendo datos con IA...</h3>", unsafe_allow_html=True)
-                time.sleep(1.5) # Retraso extra para leer el mensaje
+                st.markdown("<h3 style='text-align: center;'>🤖 Clasificando y Asignando...</h3>", unsafe_allow_html=True)
+                time.sleep(1.5)
 
-            # Actualizamos el estado para que no se repita hasta el próximo correo real
             st.session_state.last_row_count = current_count
-            
-            # Notificación
-            st.toast('¡Base de datos actualizada!', icon='✅')
+            st.toast('¡Dashboard actualizado!', icon='✅')
 
-        # 3. MOSTRAR LA TABLA (Estado Normal)
-        # Esto sobrescribe la animación y muestra los datos finales
+        # 3. MOSTRAR EL DASHBOARD (Estado Normal)
         with placeholder.container():
-            # Métricas
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Total Leads", f"{current_count}")
-            hot_count = len(df[df['clasificacion_ia'] == 'Hot'])
-            col2.metric("🔥 Hot Leads", hot_count)
-            col3.metric("📡 Estado", "Esperando nuevos correos...")
+            
+            # --- SECCIÓN 1: RESÚMENES (PRIORIDAD) ---
+            st.subheader("📊 Distribución de Leads (Últimos 100)")
+            
+            col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
 
-            st.subheader("📋 Bitácora de Asignación Reciente")
+            # TABLA A: LEADS POR ESTADO (Status Step)
+            with col_kpi1:
+                st.markdown("**Por Estado**")
+                if not df.empty:
+                    df_status = df['status_step'].value_counts().reset_index()
+                    df_status.columns = ['Estado', 'Total']
+                    st.dataframe(
+                        df_status, 
+                        hide_index=True, 
+                        use_container_width=True,
+                        column_config={
+                            "Total": st.column_config.ProgressColumn(
+                                "Volumen", 
+                                format="%d", 
+                                min_value=0, 
+                                max_value=int(df_status['Total'].max())
+                            )
+                        }
+                    )
+
+            # TABLA B: LEADS POR VENDEDOR
+            with col_kpi2:
+                st.markdown("**Por Vendedor**")
+                if not df.empty:
+                    df_vendor = df['vendedor_asignado'].value_counts().reset_index()
+                    df_vendor.columns = ['Vendedor', 'Asignados']
+                    st.dataframe(
+                        df_vendor, 
+                        hide_index=True, 
+                        use_container_width=True,
+                         column_config={
+                            "Asignados": st.column_config.ProgressColumn(
+                                "Carga", 
+                                format="%d", 
+                                min_value=0, 
+                                max_value=int(df_vendor['Asignados'].max())
+                            )
+                        }
+                    )
+
+            # TABLA C: LEADS POR CLASIFICACIÓN (HOT/WARM/COLD)
+            with col_kpi3:
+                st.markdown("**Por Clasificación IA**")
+                if not df.empty:
+                    df_class = df['clasificacion_ia'].value_counts().reset_index()
+                    df_class.columns = ['Clasificación', 'Total']
+                    st.dataframe(
+                        df_class, 
+                        hide_index=True, 
+                        use_container_width=True,
+                        column_config={
+                            "Total": st.column_config.Column(
+                                "Cantidad",
+                                width="small"
+                            )
+                        }
+                    )
+
+            st.divider()
+
+            # --- SECCIÓN 2: BITÁCORA DETALLADA ---
+            st.subheader("📋 Bitácora de Entrada Reciente")
             
             st.dataframe(
-                df[['created_at', 'nombre', 'clasificacion_ia', 'vendedor_asignado', 'status_step', 'progress']],
+                df[['created_at', 'nombre', 'clasificacion_ia', 'vendedor_asignado', 'status_step', 'progress']].head(10), # Solo mostramos 10 en la tabla detallada
                 column_config={
-                    "created_at": st.column_config.DatetimeColumn(
-                        "Creación",
-                        format="D MMM YYYY, h:mm a"
-                    ),
-                    "nombre": "Nombre del Cliente",
-                    "clasificacion_ia": st.column_config.TextColumn("Clasificación IA"),
+                    "created_at": st.column_config.DatetimeColumn("Creación", format="D MMM, h:mm a"),
+                    "nombre": "Cliente",
+                    "clasificacion_ia": "IA",
                     "vendedor_asignado": "Vendedor",
-                    "status_step": "Estatus Actual",
-                    "progress": st.column_config.ProgressColumn(
-                        "Progreso", format="%d%%", min_value=0, max_value=100
-                    ),
+                    "status_step": "Estado",
+                    "progress": st.column_config.ProgressColumn("Progreso", format="%d%%"),
                 },
                 use_container_width=True,
                 hide_index=True
@@ -103,7 +147,7 @@ while True:
 
     except Exception as e:
         with placeholder.container():
-            st.warning("⏳ Esperando conexión a la base de datos...")
+            st.warning("⏳ Esperando datos...")
+            # st.write(e) # Descomentar para debug
     
-    # Espera 2 segundos antes de volver a consultar a la BD
     time.sleep(2)
