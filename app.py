@@ -4,14 +4,14 @@ from sqlalchemy import create_engine
 import os
 import time
 
-# --- CONFIGURACIÓN DE PÁGINA ---
+#  CONFIGURACIÓN DE PÁGINA 
 st.set_page_config(
     page_title="Dashboard de Leads",
     layout="wide",
     page_icon="📊"
 )
 
-# --- ESTILOS ---
+#  ESTILOS 
 st.markdown("""
 <style>
 .metric-card {
@@ -37,7 +37,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- CONEXIÓN DB ---
+# CONEXIÓN DB 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     st.error("DATABASE_URL no encontrada")
@@ -45,7 +45,7 @@ if not DATABASE_URL:
 
 engine = create_engine(DATABASE_URL)
 
-# --- CONSULTA ---
+#  CONSULTA 
 query = """
 SELECT
     nombre,
@@ -65,12 +65,12 @@ ORDER BY created_at DESC
 
 df = pd.read_sql(query, engine)
 
-# --- DASHBOARD ---
+#  DASHBOARD 
 st.title("📊 Monitor Inteligente de Leads")
 st.caption("Actualización automática cada 5 segundos")
 st.divider()
 
-# ===== MÉTRICAS =====
+#  MÉTRICAS 
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -99,7 +99,7 @@ with col3:
     </div>
     """, unsafe_allow_html=True)
 
-# ===== TABLA PRINCIPAL =====
+#  TABLA PRINCIPAL 
 st.markdown('<div class="section-title">📋 Leads Recientes</div>', unsafe_allow_html=True)
 
 df_display = df.rename(columns={
@@ -130,7 +130,7 @@ st.dataframe(
     hide_index=True
 )
 
-# ===== AGRUPACIONES =====
+# AGRUPACIONES 
 st.divider()
 st.markdown('<div class="section-title">📌 Leads por Etapa</div>', unsafe_allow_html=True)
 
@@ -177,7 +177,8 @@ df_clasificacion = (
 
 st.dataframe(df_clasificacion, hide_index=True, use_container_width=True)
 
-# --- AUTO REFRESH ---
+# AUTO REFRESH 
 time.sleep(5)
 st.rerun()
+
 
